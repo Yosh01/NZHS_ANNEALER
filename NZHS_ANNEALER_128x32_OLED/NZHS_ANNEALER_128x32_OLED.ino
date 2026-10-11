@@ -18,6 +18,10 @@
 
 //-- macros---------------------------------------------------------------
 //#define DEBUG //removes the splash screen and enables serial reset diagnostics at 115200 baud
+// Drop-gate actuator selection for Rev.A14:
+//   defined   = D9 servo
+//   undefined = D10 solenoid
+// The firmware drives only the selected actuator, never both.
 #define SERVO
 //                          Major Version
 //                          | Minor Version
@@ -1426,11 +1430,12 @@ void setup()
   pinMode(g_FeederStepPin,OUTPUT);
   pinMode(g_FeederDirPin,OUTPUT);
   pinMode(g_FeederStepperEnPin,OUTPUT);
-  #if NZHS_PLATFORM_UNO_R4
+  #if NZHS_PLATFORM_UNO_R4 && defined(SERVO)
   g_R4DropServoReady = g_R4DropServo.attach(g_DropServoPin, 500, 2500) != 0;
   #endif
   digitalWrite(g_FeederDirPin,HIGH);
-  digitalWrite(g_FeederStepperEnPin,LOW); //disable stepper driver
+  digitalWrite(g_FeederStepperEnPin,HIGH); //disable active-low stepper driver immediately at boot
+  digitalWrite(g_DropSolenoidPin,LOW);     //keep solenoid off unless explicitly selected/opened
   closeDropGate();
   turnStartStopLedOff();
   turnModeLedOff();
@@ -1532,7 +1537,9 @@ void setup()
   #else
   r4BeginWatchdog();
   if(!g_R4FeederTimerReady) Serial.println(F("R4 INIT ERROR: FEED TIMER"));
+  #ifdef SERVO
   if(!g_R4DropServoReady) Serial.println(F("R4 INIT ERROR: DROP SERVO"));
+  #endif
   if(!g_R4WatchdogReady) Serial.println(F("R4 INIT ERROR: WATCHDOG"));
   #if NZHS_HAS_LED_MATRIX
   Serial.println(F("R4 bench: M=matrix, B=buttons, W=direct, S=setup, I=status, O=WiFi off, X=clear."));
@@ -1715,7 +1722,11 @@ static void r4ResetWatchdog(void)
 *//*-------------------------------------------------------------------------*/
 static bool r4PlatformReady(void)
 {
+  #ifdef SERVO
   return g_R4FeederTimerReady && g_R4DropServoReady && g_R4WatchdogReady;
+  #else
+  return g_R4FeederTimerReady && g_R4WatchdogReady;
+  #endif
 }
 #endif
 
@@ -1827,7 +1838,11 @@ static void r4RenderMatrixPage(int16_t const temperature)
       r4DrawMatrixWord(pixels, ready ? "RDY" : "ERR");
     }
     pixels[(7 * 12) + 1] = g_R4FeederTimerReady;
+    #ifdef SERVO
     pixels[(7 * 12) + 4] = g_R4DropServoReady;
+    #else
+    pixels[(7 * 12) + 4] = true; // solenoid mode has no servo backend to initialize
+    #endif
     pixels[(7 * 12) + 7] = g_R4WatchdogReady;
     pixels[(7 * 12) + 10] = EEPROM.length() >= ARDUINO_UNO_EEPROM_SIZE;
     if(pageChanged)
@@ -1836,8 +1851,12 @@ static void r4RenderMatrixPage(int16_t const temperature)
       Serial.print(ready ? F("RDY") : F("ERR"));
       Serial.print(F(": feeder="));
       Serial.print(g_R4FeederTimerReady ? F("Y") : F("N"));
+      #ifdef SERVO
       Serial.print(F(" servo="));
       Serial.print(g_R4DropServoReady ? F("Y") : F("N"));
+      #else
+      Serial.print(F(" gate=solenoid"));
+      #endif
       Serial.print(F(" watchdog="));
       Serial.print(g_R4WatchdogReady ? F("Y") : F("N"));
       Serial.print(F(" eeprom="));
@@ -7229,7 +7248,7 @@ static void turnAnnealerOff(void)
 *//*-------------------------------------------------------------------------*/
 static void openDropGate(void)
 {
-
+  #ifdef SERVO
     #if NZHS_PLATFORM_UNO_R3
     analogWrite(g_DropServoPin,SERVO_OPEN_POSITION);
     #else
@@ -7238,8 +7257,9 @@ static void openDropGate(void)
       g_R4DropServo.writeMicroseconds(SERVO_OPEN_POSITION * 128U);
     }
     #endif
+  #else
     digitalWrite(g_DropSolenoidPin, HIGH);
-
+  #endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -7247,7 +7267,7 @@ static void openDropGate(void)
 *//*-------------------------------------------------------------------------*/
 static void closeDropGate(void)
 {
-
+  #ifdef SERVO
     #if NZHS_PLATFORM_UNO_R3
     analogWrite(g_DropServoPin,SERVO_CLOSE_POSITION); //IO9 PWM output
     #else
@@ -7256,8 +7276,9 @@ static void closeDropGate(void)
       g_R4DropServo.writeMicroseconds(SERVO_CLOSE_POSITION * 128U);
     }
     #endif
+  #else
     digitalWrite(g_DropSolenoidPin, LOW);
-
+  #endif
 }
 /*---------------------------------------------------------------------------*/
 /*! @brief      Turn the start/stop LED on.

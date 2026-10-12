@@ -246,19 +246,6 @@ jobs:
           console.log(`Validated ${scripts.length} embedded script(s) and web manifest.`);
           NODE
 
-      - name: Verify tracked firmware artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          project='NZHS_ANNEALER_128x32_OLED.ino'
-          cmp "$BUILD_ROOT/uno-r3/$project.hex" \
-              "$SKETCH/$project.standard.hex"
-          cmp "$BUILD_ROOT/uno-r3/$project.with_bootloader.hex" \
-              "$SKETCH/$project.with_bootloader.standard.hex"
-          cmp "$BUILD_ROOT/r4-wifi/$project.bin" \
-              "$SKETCH/$project.uno-r4-wifi.bin"
-          echo 'Tracked Uno R3 and R4 WiFi artifacts match the pinned CI build.'
-
       - name: Collect firmware outputs
         shell: bash
         run: |
@@ -284,3 +271,17 @@ jobs:
             /tmp/nzhs-firmware-ci/logs
           if-no-files-found: error
           retention-days: 14
+
+      - name: Verify tracked firmware artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='NZHS_ANNEALER_128x32_OLED.ino'
+          cmp "$BUILD_ROOT/uno-r3/$project.hex" \
+              "$SKETCH/$project.standard.hex"
+          cmp "$BUILD_ROOT/uno-r3/$project.with_bootloader.hex" \
+              "$SKETCH/$project.with_bootloader.standard.hex"
+          cmp "$BUILD_ROOT/r4-wifi/$project.bin" \
+              "$SKETCH/$project.uno-r4-wifi.bin"
+          echo 'Tracked Uno R3 and R4 WiFi artifacts match the pinned CI build.'
+
